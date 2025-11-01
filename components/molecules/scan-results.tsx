@@ -6,7 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, AlertTriangle, Copy, Check, Github } from "lucide-react";
-import { createGitHubIssue, hasToken } from "@/lib/github-api";
+import { useSession } from "next-auth/react";
+import { createGitHubIssueServerAction } from "@/app/actions/create_issue";
 
 interface SecretMatch {
   file: string;
@@ -30,6 +31,7 @@ export function ScanResults({
   isLoading,
   onOpenAuthModal,
 }: ScanResultsProps) {
+  const { data: session } = useSession();
   const [isCreatingIssue, setIsCreatingIssue] = useState(false);
   const [issueCreated, setIssueCreated] = useState(false);
   const [issueUrl, setIssueUrl] = useState("");
@@ -43,16 +45,15 @@ export function ScanResults({
   }, {} as Record<string, SecretMatch[]>);
 
   const handleCreateIssue = async () => {
-    if (!hasToken()) {
+    if (!session) {
       onOpenAuthModal();
       return;
     }
 
     setError("");
     setIsCreatingIssue(true);
-
     try {
-      const result = await createGitHubIssue(owner, repo, secrets);
+      const result = await createGitHubIssueServerAction(owner, repo, secrets);
       if (result.success && result.issueUrl) {
         setIssueCreated(true);
         setIssueUrl(result.issueUrl);
@@ -99,7 +100,7 @@ export function ScanResults({
         <AlertDescription>
           Found {secrets.length} potential secret
           {secrets.length !== 1 ? "s" : ""} in{" "}
-          {Object.keys(secretsByType).length} categor
+          {Object.keys(secretsByType).length} category
           {Object.keys(secretsByType).length !== 1 ? "ies" : "y"}
         </AlertDescription>
       </Alert>

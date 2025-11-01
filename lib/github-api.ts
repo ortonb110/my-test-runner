@@ -2,7 +2,8 @@
 // Tokens are stored in memory only and never persisted
 
 import { getSession } from "next-auth/react";
-
+import { getRepositoryFiles } from "@/app/actions/get_git_repo_files";
+import { getFileContent } from "@/app/actions/get_file_content";
 interface GitHubRepository {
   id: number;
   name: string;
@@ -17,7 +18,7 @@ interface GitHubRepository {
   stargazers_count: number;
 }
 
-interface GitHubFile {
+export interface GitHubFile {
   name: string;
   path: string;
   type: "file" | "dir";
@@ -38,7 +39,7 @@ interface RateLimitInfo {
   reset: number;
 }
 
-class GitHubAPIError extends Error {
+export class GitHubAPIError extends Error {
   constructor(
     public statusCode: number,
     public message: string,
@@ -101,7 +102,7 @@ export async function getRateLimitInfo(): Promise<RateLimitInfo> {
   // Fetch latest rate limit info or return default
   const response = await fetch("https://api.github.com/rate_limit", {
     headers: {
-      ...(hasToken() && { Authorization: `token ${currentToken}` }),
+      ...(hasToken() && { Authorization: `Bearer ${currentToken}` }),
     },
   });
   const data = await response.json();
@@ -212,15 +213,54 @@ async function fetchWithRetry(
 
 // Secret detection patterns
 const SECRET_PATTERNS = {
-  apiKey: /api[_-]?key['"]?\s*[:=]\s*['"]?([a-zA-Z0-9\-_]{20,})['"]?/gi,
-  awsKey: /AKIA[0-9A-Z]{16}/g,
-  privateKey: /-----BEGIN (RSA|DSA|EC|PGP|OPENSSH) PRIVATE KEY-----/g,
-  stripeKey: /(sk_live_|pk_live_)[a-zA-Z0-9]{20,}/g,
-  githubToken: /ghp_[a-zA-Z0-9]{36}/g,
-  jwtToken: /eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*/g,
-  password: /password['"]?\s*[:=]\s*['"]([^'"]{8,})['"]?/gi,
-  databaseUrl: /(postgres|mysql|mongodb):\/\/[^\s]+/gi,
-  slackToken: /xox[baprs]-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24,34}/g,
+  // API Keys
+  apiKey: /\bapi[_-]?key['"]?\s*[:=]\s*['"]?([A-Za-z0-9\-_]{16,})['"]?/gi,
+  googleApiKey: /\bAIza[0-9A-Za-z\-_]{35}\b/g,
+  githubToken: /\bgh[pousr]_[A-Za-z0-9]{36,}\b/g,
+  slackToken: /\bxox[baprs]-[0-9A-Za-z-]{10,}\b/g,
+  stripeKey: /\b(sk|pk)_(live|test)_[0-9A-Za-z]{20,}\b/g,
+  twilioKey: /\bSK[0-9a-fA-F]{32}\b/g,
+  sendgridKey: /\bSG\.[A-Za-z0-9\-_]{16,}\.[A-Za-z0-9\-_]{16,}\b/g,
+  mailchimpKey: /\b[0-9a-f]{32}-us[0-9]{1,2}\b/g,
+  firebaseKey: /\bAAAA[A-Za-z0-9_-]{7}:[A-Za-z0-9_-]{140}\b/g,
+
+  // Cloud Provider Keys
+  awsAccessKey: /\bAKIA[0-9A-Z]{16}\b/g,
+  awsSecretKey: /(?<![A-Za-z0-9/+=])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])/g,
+  azureKey: /\b[A-Za-z0-9+\/]{88}==\b/g,
+  gcpServiceAccount: /"type":\s*"service_account"/g,
+
+  // Private Keys & Certificates
+  privateKey:
+    /-----BEGIN (RSA|DSA|EC|PGP|OPENSSH|PRIVATE) KEY-----[\s\S]+?-----END (RSA|DSA|EC|PGP|OPENSSH|PRIVATE) KEY-----/g,
+  sshKey: /ssh-rsa\s+[A-Za-z0-9+\/]+={0,3}\s*(?:[^\s@]+@[^\s@]+)?/g,
+
+  // Authentication Tokens
+  jwtToken: /\beyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\b/g,
+  bearerToken:
+    /\bBearer\s+[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\b/g,
+  oauthToken: /\bya29\.[0-9A-Za-z\-_]+\b/g,
+  genericToken:
+    /\b(access|auth|refresh|secret|session|token)['"]?\s*[:=]\s*['"]?([A-Za-z0-9\-_]{16,})['"]?/gi,
+
+  // Database & Connection Strings
+  databaseUrl:
+    /\b(?:postgres|mysql|mongodb|mssql|oracle|redis|couchdb|neo4j|jdbc):\/\/[^\s'"]+\b/gi,
+  dsn: /\bDSN=['"]?[A-Za-z0-9:_@\/\.\-\?&=]+['"]?/gi,
+
+  // Passwords, Secrets, and Credentials
+  password: /\bpass(word)?['"]?\s*[:=]\s*['"]([^'"\s]{6,})['"]?/gi,
+  secret: /\bsecret['"]?\s*[:=]\s*['"]([^'"\s]{8,})['"]?/gi,
+  credential: /\b(credential|creds)['"]?\s*[:=]\s*['"]([^'"\s]{8,})['"]?/gi,
+  encryptionKey:
+    /\benc(ryption)?[_-]?key['"]?\s*[:=]\s*['"]?([A-Za-z0-9\-_+/=]{16,})['"]?/gi,
+
+  // Base64 or Random-like Strings (often secrets)
+  base64String: /\b[A-Za-z0-9+/]{40,}={0,2}\b/g,
+
+  // Generic Keyword-based Secrets
+  keyLike:
+    /\b(api[-_]?key|secret[-_]?key|client[-_]?secret|auth[-_]?token|access[-_]?key|private[-_]?key|encryption[-_]?key)\b/gi,
 };
 
 export async function searchRepositories(
@@ -256,49 +296,6 @@ export async function searchRepositories(
   } catch (error) {
     if (error instanceof GitHubAPIError) throw error;
     throw new GitHubAPIError(0, "Failed to search repositories", false);
-  }
-}
-
-export async function getRepositoryFiles(
-  owner: string,
-  repo: string,
-  path = ""
-): Promise<GitHubFile[]> {
-  try {
-    const response = await fetchWithRetry(
-      `https://api.github.com/repos/${owner}/${repo}/contents/${path}`,
-      {
-        headers: {
-          Accept: "application/vnd.github.v3+json",
-          ...(currentToken && { Authorization: `token ${currentToken}` }),
-        },
-      }
-    );
-
-    const data = await response.json();
-    return Array.isArray(data) ? data : [data];
-  } catch (error) {
-    if (error instanceof GitHubAPIError) {
-      throw error;
-    }
-    throw new GitHubAPIError(0, "Failed to fetch repository files", false);
-  }
-}
-
-export async function getFileContent(downloadUrl: string): Promise<string> {
-  try {
-    const response = await fetchWithRetry(downloadUrl, {
-      headers: {
-        ...(currentToken && { Authorization: `token ${currentToken}` }),
-      },
-    });
-
-    return response.text();
-  } catch (error) {
-    if (error instanceof GitHubAPIError) {
-      throw error;
-    }
-    throw new GitHubAPIError(0, "Failed to fetch file content", false);
   }
 }
 
@@ -410,89 +407,4 @@ export async function scanRepositoryForSecrets(
 
   await scanDirectory();
   return secrets;
-}
-
-export async function createGitHubIssue(
-  owner: string,
-  repo: string,
-  secrets: SecretMatch[]
-): Promise<{ success: boolean; issueUrl?: string; error?: string }> {
-  if (!currentToken) {
-    return { success: false, error: "GitHub token required to create issues" };
-  }
-
-  const secretsByType = secrets.reduce((acc, secret) => {
-    if (!acc[secret.type]) acc[secret.type] = [];
-    acc[secret.type].push(secret);
-    return acc;
-  }, {} as Record<string, SecretMatch[]>);
-
-  const body = `## Security Alert: Potential Secrets Detected
-
-This repository appears to contain potential API keys, tokens, or other sensitive information that should not be committed to version control.
-
-### Findings Summary
-- **Total matches**: ${secrets.length}
-- **Types detected**: ${Object.keys(secretsByType).join(", ")}
-
-### Detected Files
-${Object.entries(secretsByType)
-  .map(([type, matches]) => {
-    const files = [...new Set(matches.map((m) => m.file))];
-    return `**${type}** (${matches.length} matches)\n${files
-      .map((f) => `- \`${f}\``)
-      .join("\n")}`;
-  })
-  .join("\n\n")}
-
-### Recommended Actions
-1. **Rotate all exposed credentials** immediately
-2. **Remove secrets from git history** using \`git filter-branch\` or \`BFG Repo-Cleaner\`
-3. **Move secrets to environment variables** or a secret manager (e.g., GitHub Secrets, AWS Secrets Manager)
-4. **Enable secret scanning** in repository settings
-5. **Review recent commits** for any unauthorized access
-
-### Resources
-- [GitHub Secret Scanning](https://docs.github.com/en/code-security/secret-scanning)
-- [Removing sensitive data from git](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository)
-- [BFG Repo-Cleaner](https://rtyley.github.io/bfg-repo-cleaner/)
-
----
-*This issue was created by the Public Repo Secret Hunter tool.*`;
-
-  try {
-    const response = await fetchWithRetry(
-      `https://api.github.com/repos/${owner}/${repo}/issues`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `token ${currentToken}`,
-          Accept: "application/vnd.github.v3+json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: "Security Alert: Potential Secrets Detected",
-          body,
-          labels: ["security", "bug"],
-        }),
-      }
-    );
-
-    const issue = await response.json();
-    return {
-      success: true,
-      issueUrl: issue.html_url,
-    };
-  } catch (error) {
-    if (error instanceof GitHubAPIError) {
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-  }
 }

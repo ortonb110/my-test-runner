@@ -3,7 +3,13 @@ import GitHub from "next-auth/providers/github";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
-    GitHub,
+    GitHub({
+      authorization: {
+        params: {
+          scope: "read:user public_repo",
+        },
+      },
+    }),
   ],
 
   callbacks: {
