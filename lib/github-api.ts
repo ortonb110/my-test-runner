@@ -325,7 +325,7 @@ export async function scanRepositoryForSecrets(
     type: string;
     name: string;
     description: string;
-    severity: string;
+    severity: "low" | "medium" | "high" | "critical";
   }[]
 > {
   const secrets: any[] = [];

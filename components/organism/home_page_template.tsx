@@ -21,6 +21,9 @@ interface SecretMatch {
   line: number;
   content: string;
   type: string;
+  name: string;
+  description: string;
+  severity: "low" | "medium" | "high" | "critical";
 }
 
 type AppState = "search" | "scanning" | "results";
