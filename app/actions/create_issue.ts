@@ -64,7 +64,7 @@ ${Object.entries(secretsByType)
 *This issue was created by the Repo Secret Scanner tool.*`;
 
   try {
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `https://api.github.com/repos/${owner}/${repo}/issues`,
       {
         method: "POST",
