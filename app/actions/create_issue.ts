@@ -55,7 +55,7 @@ export async function createGitHubIssueServerAction(
     return acc;
   }, {} as Record<string, SecretMatch[]>);
 
-  // 📝 Build Markdown table for each secret type
+  // Build Markdown table for each secret type
   const tableSection = Object.entries(secretsByType)
     .map(([type, matches]) => {
       const tableRows = matches
@@ -129,6 +129,13 @@ ${tableSection}
 
     if (!response.ok) {
       const errText = await response.text();
+      if (response.status === 410 || errText.includes("Issues are disabled")) {
+        return {
+          success: false,
+          error:
+            "Issues are disabled for this repository. Please enable GitHub Issues to allow automated reporting.",
+        };
+      }
       throw new Error(`GitHub API Error: ${response.status} ${errText}`);
     }
 
