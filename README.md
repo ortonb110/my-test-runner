@@ -1,4 +1,7 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Repo Secret Scanner
+
+A web-based tool that scans public GitHub repositories for exposed secrets, API keys, and other sensitive information.  
+Built with **Next.js**, using **GitHub OAuth** for authentication.
 
 ## Getting Started
 
@@ -14,23 +17,35 @@ pnpm dev
 bun dev
 ```
 
+### ENV Requirements
+#### Authentication configuration
+AUTH_SECRET=your-random-secret-key
+AUTH_GITHUB_ID=your-github-oauth-client-id
+AUTH_GITHUB_SECRET=your-github-oauth-client-secret
+AUTH_URL=http://localhost:3000
+
+#### Generate here -> https://github.com/settings/developers
+
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Learn More
+## Assumptions and Limitations
 
-To learn more about Next.js, take a look at the following resources:
+- Only scans **text-based files** (e.g., `.js`, `.ts`, `.py`, `.env`, `.json`, etc.).  
+- Skips large/binary files and common folders like `node_modules`, `dist`, `.git`, etc.  
+- **GitHub API rate limits** may affect large scans.  
+- No backend server — all actions use **Next.js Server Actions** and GitHub APIs.  
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Future Improvements
 
-## Deploy on Vercel
+If given more time, I would:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Integrate **real-time progress tracking** for large scans.  
+- Enhance detection patterns using **machine learning-based secret classification**.  
+- Add **report export (PDF/CSV)** and **email notifications**.  
+- Improve performance with **parallel file scanning** and **caching**.

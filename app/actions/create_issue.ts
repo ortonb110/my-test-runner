@@ -8,7 +8,33 @@ export interface SecretMatch {
   line: number;
   content: string;
   type: string;
+  name: string;
+  description: string;
+  severity: "low" | "medium" | "high" | "critical";
 }
+
+/**
+ * Create a GitHub issue summarizing detected secrets for a repository.
+ *
+ * This is a server-side action that authenticates via the `auth()` helper to
+ * obtain a GitHub access token. If no token is available the function returns
+ * `{ success: false, error: 'GitHub token required to create issues' }` and
+ * does not attempt to create an issue.
+ *
+ * The function groups the provided `secrets` by type, builds a Markdown
+ * formatted issue body with findings and recommended remediation steps, and
+ * posts it to the repository's issues endpoint using `fetchWithRetry`.
+ *
+ * @param {string} owner - Repository owner (user or organization).
+ * @param {string} repo - Repository name.
+ * @param {SecretMatch[]} secrets - Array of detected secret matches to include in the issue.
+ * @returns {Promise<{ success: boolean; issueUrl?: string; error?: string }>} Resolves
+ *   with an object containing `success` and, on success, the created
+ *   `issueUrl`. On failure returns `success: false` and an `error` message.
+ * @example
+ * const res = await createGitHubIssueServerAction('my-org', 'my-repo', matches);
+ * if (res.success) console.log('Created issue at', res.issueUrl);
+ */
 
 export async function createGitHubIssueServerAction(
   owner: string,
@@ -22,14 +48,35 @@ export async function createGitHubIssueServerAction(
     return { success: false, error: "GitHub token required to create issues" };
   }
 
-  // 🧩 Group secrets by type for better formatting
+  // 🧩 Group secrets by type
   const secretsByType = secrets.reduce((acc, secret) => {
     if (!acc[secret.type]) acc[secret.type] = [];
     acc[secret.type].push(secret);
     return acc;
   }, {} as Record<string, SecretMatch[]>);
 
-  // 📝 Build the issue body
+  // 📝 Build Markdown table for each secret type
+  const tableSection = Object.entries(secretsByType)
+    .map(([type, matches]) => {
+      const tableRows = matches
+        .map(
+          (m) =>
+            `| \`${m.file}\` | ${
+              m.description
+            } | **${m.severity.toUpperCase()}** |`
+        )
+        .join("\n");
+
+      return `#### ${matches[0].name} (${type})
+
+| File | Description | Severity |
+|------|--------------|-----------|
+${tableRows}
+`;
+    })
+    .join("\n\n");
+
+  // 🧾 Full issue body
   const body = `## Security Alert: Potential Secrets Detected
 
 This repository appears to contain potential API keys, tokens, or other sensitive information that should not be committed to version control.
@@ -38,22 +85,20 @@ This repository appears to contain potential API keys, tokens, or other sensitiv
 - **Total matches**: ${secrets.length}
 - **Types detected**: ${Object.keys(secretsByType).join(", ")}
 
-### Detected Files
-${Object.entries(secretsByType)
-  .map(([type, matches]) => {
-    const files = [...new Set(matches.map((m) => m.file))];
-    return `**${type}** (${matches.length} matches)\n${files
-      .map((f) => `- \`${f}\``)
-      .join("\n")}`;
-  })
-  .join("\n\n")}
+---
+
+### 📄 Detailed Findings
+
+${tableSection}
+
+---
 
 ### Recommended Actions
-1. **Rotate all exposed credentials** immediately
-2. **Remove secrets from git history** using \`git filter-branch\` or \`BFG Repo-Cleaner\`
-3. **Move secrets to environment variables** or a secret manager (e.g., GitHub Secrets, AWS Secrets Manager)
-4. **Enable secret scanning** in repository settings
-5. **Review recent commits** for any unauthorized access
+1. **Rotate all exposed credentials** immediately.
+2. **Remove secrets from git history** using \`git filter-branch\` or \`BFG Repo-Cleaner\`.
+3. **Move secrets to environment variables** or a secret manager (e.g., GitHub Secrets, AWS Secrets Manager).
+4. **Enable secret scanning** in repository settings.
+5. **Review recent commits** for any unauthorized access.
 
 ### Resources
 - [GitHub Secret Scanning](https://docs.github.com/en/code-security/secret-scanning)
@@ -61,7 +106,9 @@ ${Object.entries(secretsByType)
 - [BFG Repo-Cleaner](https://rtyley.github.io/bfg-repo-cleaner/)
 
 ---
-*This issue was created by the Repo Secret Scanner tool.*`;
+
+*This issue was created automatically by the **Repo Secret Scanner** tool.*
+`;
 
   try {
     const response = await fetchWithRetry(

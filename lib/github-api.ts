@@ -1,9 +1,7 @@
-// GitHub API client with secure token management and rate limiting
-// Tokens are stored in memory only and never persisted
-
 import { getSession } from "next-auth/react";
 import { getRepositoryFiles } from "@/app/actions/get_git_repo_files";
 import { getFileContent } from "@/app/actions/get_file_content";
+import { SECRET_PATTERNS } from "@/constants/pattern";
 interface GitHubRepository {
   id: number;
   name: string;
@@ -24,13 +22,6 @@ export interface GitHubFile {
   type: "file" | "dir";
   size?: number;
   download_url?: string;
-}
-
-interface SecretMatch {
-  file: string;
-  line: number;
-  content: string;
-  type: string;
 }
 
 interface RateLimitInfo {
@@ -87,7 +78,7 @@ export async function syncGitHubAuthToken() {
     } else {
       if (process.env.NODE_ENV === "development") {
         console.info(
-          "[GitHubAPI] Using unauthenticated (limited) GitHub access ⚠️"
+          "[GitHubAPI] Using unauthenticated (limited) GitHub access"
         );
       }
     }
@@ -98,6 +89,27 @@ export async function syncGitHubAuthToken() {
   }
 }
 
+/**
+ * Retrieve the current GitHub API rate limit information.
+ *
+ * This calls the public `https://api.github.com/rate_limit` endpoint and
+ * returns the `rate` object which contains `remaining`, `limit`, and `reset`
+ * (timestamp in milliseconds). If a `currentToken` is available, it will be
+ * sent as a Bearer token to increase the available rate quota.
+ *
+ * Example:
+ * ```ts
+ * const rate = await getRateLimitInfo();
+ * console.log(rate.remaining, rate.limit, new Date(rate.reset));
+ * ```
+ *
+ * @returns {Promise<RateLimitInfo>} Resolves to the rate limit info with:
+ *  - `remaining`: number of requests left
+ *  - `limit`: total allowed requests in the window
+ *  - `reset`: unix timestamp (ms) when limit resets
+ * @throws {Error} Will reject if the network request fails or GitHub returns
+ *   an unexpected body that can't be parsed.
+ */
 export async function getRateLimitInfo(): Promise<RateLimitInfo> {
   // Fetch latest rate limit info or return default
   const response = await fetch("https://api.github.com/rate_limit", {
@@ -211,58 +223,27 @@ async function fetchWithRetry(
   throw lastError || new Error("Failed to fetch from GitHub API");
 }
 
-// Secret detection patterns
-const SECRET_PATTERNS = {
-  // API Keys
-  apiKey: /\bapi[_-]?key['"]?\s*[:=]\s*['"]?([A-Za-z0-9\-_]{16,})['"]?/gi,
-  googleApiKey: /\bAIza[0-9A-Za-z\-_]{35}\b/g,
-  githubToken: /\bgh[pousr]_[A-Za-z0-9]{36,}\b/g,
-  slackToken: /\bxox[baprs]-[0-9A-Za-z-]{10,}\b/g,
-  stripeKey: /\b(sk|pk)_(live|test)_[0-9A-Za-z]{20,}\b/g,
-  twilioKey: /\bSK[0-9a-fA-F]{32}\b/g,
-  sendgridKey: /\bSG\.[A-Za-z0-9\-_]{16,}\.[A-Za-z0-9\-_]{16,}\b/g,
-  mailchimpKey: /\b[0-9a-f]{32}-us[0-9]{1,2}\b/g,
-  firebaseKey: /\bAAAA[A-Za-z0-9_-]{7}:[A-Za-z0-9_-]{140}\b/g,
-
-  // Cloud Provider Keys
-  awsAccessKey: /\bAKIA[0-9A-Z]{16}\b/g,
-  awsSecretKey: /(?<![A-Za-z0-9/+=])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])/g,
-  azureKey: /\b[A-Za-z0-9+\/]{88}==\b/g,
-  gcpServiceAccount: /"type":\s*"service_account"/g,
-
-  // Private Keys & Certificates
-  privateKey:
-    /-----BEGIN (RSA|DSA|EC|PGP|OPENSSH|PRIVATE) KEY-----[\s\S]+?-----END (RSA|DSA|EC|PGP|OPENSSH|PRIVATE) KEY-----/g,
-  sshKey: /ssh-rsa\s+[A-Za-z0-9+\/]+={0,3}\s*(?:[^\s@]+@[^\s@]+)?/g,
-
-  // Authentication Tokens
-  jwtToken: /\beyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\b/g,
-  bearerToken:
-    /\bBearer\s+[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\b/g,
-  oauthToken: /\bya29\.[0-9A-Za-z\-_]+\b/g,
-  genericToken:
-    /\b(access|auth|refresh|secret|session|token)['"]?\s*[:=]\s*['"]?([A-Za-z0-9\-_]{16,})['"]?/gi,
-
-  // Database & Connection Strings
-  databaseUrl:
-    /\b(?:postgres|mysql|mongodb|mssql|oracle|redis|couchdb|neo4j|jdbc):\/\/[^\s'"]+\b/gi,
-  dsn: /\bDSN=['"]?[A-Za-z0-9:_@\/\.\-\?&=]+['"]?/gi,
-
-  // Passwords, Secrets, and Credentials
-  password: /\bpass(word)?['"]?\s*[:=]\s*['"]([^'"\s]{6,})['"]?/gi,
-  secret: /\bsecret['"]?\s*[:=]\s*['"]([^'"\s]{8,})['"]?/gi,
-  credential: /\b(credential|creds)['"]?\s*[:=]\s*['"]([^'"\s]{8,})['"]?/gi,
-  encryptionKey:
-    /\benc(ryption)?[_-]?key['"]?\s*[:=]\s*['"]?([A-Za-z0-9\-_+/=]{16,})['"]?/gi,
-
-  // Base64 or Random-like Strings (often secrets)
-  base64String: /\b[A-Za-z0-9+/]{40,}={0,2}\b/g,
-
-  // Generic Keyword-based Secrets
-  keyLike:
-    /\b(api[-_]?key|secret[-_]?key|client[-_]?secret|auth[-_]?token|access[-_]?key|private[-_]?key|encryption[-_]?key)\b/gi,
-};
-
+/**
+ * Search GitHub repositories using the public GitHub Search API.
+ *
+ * This helper wraps the GitHub search endpoint and returns the parsed JSON
+ * response. It uses the internal `fetchWithRetry` utility which applies rate
+ * limit checks and exponential backoff for transient errors. If a `currentToken`
+ * is present it will be included as an Authorization header to increase rate
+ * limits and access private results (subject to token scope).
+ *
+ * @example
+ * const results = await searchRepositories('react', 1);
+ * console.log(results.total_count, results.items.length);
+ *
+ * @param {string} query - The search query string (see GitHub search syntax).
+ * @param {number} [page=1] - Optional results page number (1-based).
+ * @returns {Promise<{ total_count: number; incomplete_results: boolean; items: GitHubRepository[] }>} Resolves
+ *   with the GitHub search result object containing `total_count`,
+ *   `incomplete_results`, and `items` (array of `GitHubRepository`).
+ * @throws {GitHubAPIError} Throws a `GitHubAPIError` when the GitHub API
+ *   returns a non-OK response or when network/fetch errors occur.
+ */
 export async function searchRepositories(
   query: string,
   page = 1
@@ -299,17 +280,77 @@ export async function searchRepositories(
   }
 }
 
+/**
+ * Scan a GitHub repository for potential secrets (API keys, tokens, private keys, etc.).
+ *
+ * The scanner walks the repository tree up to 3 levels deep and scans up to a
+ * maximum number of files (controlled by an internal `maxFiles` variable) to
+ * avoid excessive API usage and rate limiting. It only examines files with
+ * common text/code extensions and skips common build/vendor directories and
+ * lock/config files.
+ *
+ * For each line that matches one of the regexes in `SECRET_PATTERNS`, a
+ * SecretMatch is added to the returned array. Each match includes the file
+ * path, 1-based line number, a truncated preview of the line (first 100
+ * characters), and the detected secret `type` (the key in `SECRET_PATTERNS`).
+ *
+ * Note: the function logs non-fatal scanning errors and will continue scanning
+ * other files if an individual file fails to load. However, directory-level
+ * errors are re-thrown so callers can decide how to handle critical failures.
+ *
+ * @example
+ * const matches = await scanRepositoryForSecrets('owner', 'repo', (msg) => console.log(msg));
+ *
+ * @param {string} owner - GitHub repository owner (user or org).
+ * @param {string} repo - Repository name.
+ * @param {(message: string) => void} [onProgress] - Optional callback invoked
+ *   with progress messages (directory/file being scanned). Useful for UI
+ *   progress updates or logging.
+ * @returns {Promise<SecretMatch[]>} Promise that resolves to an array of
+ *   SecretMatch objects describing the detected secrets. Each object has the
+ *   shape: { file: string, line: number, content: string, type: string }.
+ * @throws Will re-throw directory-level errors so callers can handle critical
+ *   failures (e.g. permission or network errors). Individual file read errors
+ *   are logged and do not stop the overall scan.
+ */
 export async function scanRepositoryForSecrets(
   owner: string,
   repo: string,
   onProgress?: (message: string) => void
-): Promise<SecretMatch[]> {
-  const secrets: SecretMatch[] = [];
+): Promise<
+  {
+    file: string;
+    line: number;
+    content: string;
+    type: string;
+    name: string;
+    description: string;
+    severity: string;
+  }[]
+> {
+  const secrets: any[] = [];
   const scannedFiles = new Set<string>();
-  const maxFiles = 100; // Limit to prevent rate limiting
+  const maxFiles = 100;
 
   async function scanDirectory(path = "", depth = 0) {
     if (depth > 3 || scannedFiles.size >= maxFiles) return;
+
+    const SKIP_DIRS = [
+      ".git",
+      "node_modules",
+      ".venv",
+      "venv",
+      "dist",
+      "build",
+      ".next",
+    ];
+    const SKIP_FILES = [
+      "package-lock.json",
+      "yarn.lock",
+      "pnpm-lock.yaml",
+      ".DS_Store",
+      "package.json",
+    ];
 
     try {
       onProgress?.(`Scanning directory: ${path || "root"}`);
@@ -317,25 +358,10 @@ export async function scanRepositoryForSecrets(
 
       for (const file of files) {
         if (scannedFiles.size >= maxFiles) break;
-
-        // Skip common non-code directories
-        if (
-          file.type === "dir" &&
-          [
-            ".git",
-            "node_modules",
-            ".venv",
-            "venv",
-            "dist",
-            "build",
-            ".next",
-          ].includes(file.name)
-        ) {
-          continue;
-        }
+        if (file.type === "dir" && SKIP_DIRS.includes(file.name)) continue;
+        if (file.type === "file" && SKIP_FILES.includes(file.name)) continue;
 
         if (file.type === "file") {
-          // Only scan text files
           const textExtensions = [
             ".js",
             ".ts",
@@ -376,23 +402,24 @@ export async function scanRepositoryForSecrets(
               const lines = content.split("\n");
 
               lines.forEach((line, lineIndex) => {
-                Object.entries(SECRET_PATTERNS).forEach(([type, pattern]) => {
-                  if (pattern.test(line)) {
+                SECRET_PATTERNS.forEach((pattern) => {
+                  if (pattern.regex.test(line)) {
                     secrets.push({
                       file: file.path,
                       line: lineIndex + 1,
                       content: line.substring(0, 100),
-                      type,
+                      type: pattern.id,
+                      name: pattern.name,
+                      description: pattern.description,
+                      severity: pattern.severity,
                     });
-                    // Reset regex for global patterns
-                    if (pattern.global) pattern.lastIndex = 0;
+                    if (pattern.regex.global) pattern.regex.lastIndex = 0;
                   }
                 });
               });
             }
           } catch (error) {
             console.error(`[v0] Error scanning file ${file.path}:`, error);
-            // Continue scanning other files even if one fails
           }
         } else if (file.type === "dir" && depth < 3) {
           await scanDirectory(file.path, depth + 1);
@@ -400,7 +427,6 @@ export async function scanRepositoryForSecrets(
       }
     } catch (error) {
       console.error(`[v0] Error scanning directory ${path}:`, error);
-      // Re-throw to let caller handle critical errors
       throw error;
     }
   }

@@ -115,9 +115,11 @@ export default function Home() {
                 <Shield className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-white">Secret Hunter</h1>
+                <h1 className="text-3xl font-bold text-white">
+                  Secret Scanner
+                </h1>
                 <p className="text-slate-400">
-                  Scan public repositories for exposed secrets
+                  Scan public/private (Owned) repositories for exposed secrets
                 </p>
               </div>
             </div>

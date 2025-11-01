@@ -14,6 +14,9 @@ interface SecretMatch {
   line: number;
   content: string;
   type: string;
+  name: string;
+  description: string;
+  severity: "low" | "medium" | "high" | "critical";
 }
 
 interface ScanResultsProps {
@@ -40,7 +43,15 @@ export function ScanResults({
 
   const secretsByType = secrets.reduce((acc, secret) => {
     if (!acc[secret.type]) acc[secret.type] = [];
-    acc[secret.type].push(secret);
+    acc[secret.type].push({
+      file: secret.file,
+      line: secret.line,
+      content: secret.content,
+      type: secret.type,
+      name: secret.name,
+      description: secret.description,
+      severity: secret.severity,
+    });
     return acc;
   }, {} as Record<string, SecretMatch[]>);
 
