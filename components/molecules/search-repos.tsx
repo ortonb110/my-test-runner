@@ -124,11 +124,11 @@ export function SearchRepos({
             Found {results.length} repositories
           </p>
 
-          <div className="grid gap-3">
+          <div className="grid gap-3 w-full max-w-full overflow-hidden">
             {results.map((repo) => (
               <Card
                 key={repo.id}
-                className="p-3 sm:p-4 hover:bg-accent/50 cursor-pointer transition-colors"
+                className="p-3 sm:p-4 hover:bg-accent/50 cursor-pointer transition-colors w-full overflow-hidden"
                 onClick={() => onSelectRepo(repo.owner.login, repo.name)}
               >
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -150,7 +150,7 @@ export function SearchRepos({
                         {repo.full_name}
                       </a>
                       {repo.description && (
-                        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 break-words">
+                        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 overflow-ellipsis lg:max-w-[850px]">
                           {repo.description}
                         </p>
                       )}
