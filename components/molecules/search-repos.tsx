@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-
+import Image from "next/image";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Search, AlertCircle, Star } from "lucide-react";
 import { searchRepositories } from "@/lib/github-api";
+import { CustomPagination } from "@/components/molecules/custom-pagination";
 
 interface Repository {
   id: number;
@@ -37,23 +38,25 @@ export function SearchRepos({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
+  const [repos, setRepos] = useState<{
+    total_count: number;
+    incomplete_results: boolean;
+    items: Repository[];
+  }>({ total_count: 0, incomplete_results: false, items: [] });
+  const [currentPage, setCurrentPage] = useState(1);
+  const perPage = 10;
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const fetchRepos = async (page = 1) => {
     setError("");
     setIsLoading(true);
-    setHasSearched(true);
-
-    if (!query.trim()) {
-      setError("Please enter a search query");
-      setIsLoading(false);
-      return;
-    }
 
     try {
-      const repos = await searchRepositories(query);
-      setResults(repos);
-      if (repos.length === 0) {
+      const repos = await searchRepositories(query, page);
+      setResults(repos.items || []);
+      setRepos(repos);
+      setCurrentPage(page);
+
+      if (repos.items.length === 0) {
         setError("No repositories found. Try a different search term.");
       }
     } catch (err) {
@@ -65,6 +68,16 @@ export function SearchRepos({
     }
   };
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim()) {
+      setError("Please enter a search query");
+      return;
+    }
+    setHasSearched(true);
+    fetchRepos(1);
+  };
+
   return (
     <div className="space-y-4">
       <form onSubmit={handleSearch} className="flex gap-2">
@@ -73,7 +86,7 @@ export function SearchRepos({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           disabled={isLoading || parentLoading}
-          className="flex-1"
+          className="flex-1 text-white"
         />
         <Button type="submit" disabled={isLoading || parentLoading} size="icon">
           {isLoading ? (
@@ -106,10 +119,12 @@ export function SearchRepos({
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <img
+                      <Image
                         src={repo.owner.avatar_url || "/placeholder.svg"}
                         alt={repo.owner.login}
                         className="w-5 h-5 rounded-full"
+                        width={20}
+                        height={20}
                       />
                       <a
                         href={repo.html_url}
@@ -142,6 +157,13 @@ export function SearchRepos({
           <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
           <p>No repositories found</p>
         </div>
+      )}
+      {hasSearched && repos.total_count > 0 && (
+        <CustomPagination
+          totalPages={Math.ceil(repos.total_count / perPage)}
+          currentPage={currentPage}
+          onPageChange={(page) => fetchRepos(page)}
+        />
       )}
     </div>
   );

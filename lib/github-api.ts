@@ -53,8 +53,8 @@ class GitHubAPIError extends Error {
 let currentToken: string | null = null;
 
 let rateLimitInfo: RateLimitInfo = {
-  remaining: 60,
-  limit: 60,
+  remaining: 0,
+  limit: 0,
   reset: 0,
 };
 
@@ -137,13 +137,8 @@ async function fetchWithRetry(
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       // Check rate limit before making request
-      if (
-        rateLimitInfo.remaining <= 1 &&
-        Date.now() < rateLimitInfo.reset
-      ) {
-        const waitTime = Math.ceil(
-          (rateLimitInfo.reset - Date.now()) / 1000
-        );
+      if (rateLimitInfo.remaining <= 1 && Date.now() < rateLimitInfo.reset) {
+        const waitTime = Math.ceil((rateLimitInfo.reset - Date.now()) / 1000);
         throw new GitHubAPIError(
           429,
           `Rate limit exceeded. Please wait ${waitTime} seconds before trying again.`,
@@ -229,13 +224,18 @@ const SECRET_PATTERNS = {
 };
 
 export async function searchRepositories(
-  query: string
-): Promise<GitHubRepository[]> {
+  query: string,
+  page = 1
+): Promise<{
+  total_count: number;
+  incomplete_results: boolean;
+  items: GitHubRepository[];
+}> {
   try {
     const response = await fetchWithRetry(
       `https://api.github.com/search/repositories?q=${encodeURIComponent(
         query
-      )}&sort=stars&order=desc&per_page=10`,
+      )}&sort=stars&order=desc&per_page=10&page=${page}`,
       {
         headers: {
           Accept: "application/vnd.github.v3+json",
@@ -244,12 +244,17 @@ export async function searchRepositories(
       }
     );
 
-    const data = await response.json();
-    return data.items || [];
-  } catch (error) {
-    if (error instanceof GitHubAPIError) {
-      throw error;
+    if (!response.ok) {
+      throw new GitHubAPIError(
+        response.status,
+        "Failed to fetch repositories",
+        false
+      );
     }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof GitHubAPIError) throw error;
     throw new GitHubAPIError(0, "Failed to search repositories", false);
   }
 }

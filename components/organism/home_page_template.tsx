@@ -11,8 +11,6 @@ import { SearchRepos } from "@/components/molecules/search-repos";
 import { ScanResults } from "@/components/molecules/scan-results";
 import {
   scanRepositoryForSecrets,
-  hasToken,
-  clearGitHubToken,
   getRateLimitInfo,
   syncGitHubAuthToken,
 } from "@/lib/github-api";
@@ -46,22 +44,17 @@ export default function Home() {
     reset: number;
   } | null>(null);
 
+  const fetchRateLimit = async () => {
+    const rateLimitInfo: {
+      limit: number;
+      remaining: number;
+      reset: number;
+    } = await getRateLimitInfo();
+    setRateLimit(rateLimitInfo);
+  };
+
   useEffect(() => {
     syncGitHubAuthToken();
-
-    const fetchRateLimit = async () => {
-      const rateLimitInfo: { limit: number; remaining: number; reset: number } =
-        await getRateLimitInfo();
-      setRateLimit(rateLimitInfo);
-    };
-
-    // fetch immediately
-    fetchRateLimit();
-
-    // refresh periodically
-    const interval = setInterval(fetchRateLimit, 1000);
-
-    return () => clearInterval(interval);
   }, []);
 
   const handleSelectRepo = async (owner: string, repo: string) => {
@@ -100,8 +93,16 @@ export default function Home() {
   useEffect(() => {
     if (session) {
       setIsAuthenticated(true);
+      // fetch immediately
+      fetchRateLimit();
     }
   }, [session]);
+
+  useEffect(() => {
+    // refresh periodically
+    const interval = setInterval(fetchRateLimit, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <main className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900">
