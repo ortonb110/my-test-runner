@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Readex_Pro } from "next/font/google";
 import "./globals.css";
+import { SessionProvider } from "next-auth/react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,7 +30,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${readexPro.className} antialiased`}>{children}</body>
+      <SessionProvider>
+        <body className={`${readexPro.className} antialiased`}>{children}</body>
+      </SessionProvider>
     </html>
   );
 }

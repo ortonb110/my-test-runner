@@ -1,64 +1,69 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Search, AlertCircle, Star } from "lucide-react"
-import { searchRepositories } from "@/src/lib/github-api"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Search, AlertCircle, Star } from "lucide-react";
+import { searchRepositories } from "@/lib/github-api";
 
 interface Repository {
-  id: number
-  name: string
-  full_name: string
-  description: string | null
-  html_url: string
+  id: number;
+  name: string;
+  full_name: string;
+  description: string | null;
+  html_url: string;
   owner: {
-    login: string
-    avatar_url: string
-  }
-  stargazers_count: number
+    login: string;
+    avatar_url: string;
+  };
+  stargazers_count: number;
 }
 
 interface SearchReposProps {
-  onSelectRepo: (owner: string, repo: string) => void
-  isLoading?: boolean
+  onSelectRepo: (owner: string, repo: string) => void;
+  isLoading?: boolean;
 }
 
-export function SearchRepos({ onSelectRepo, isLoading: parentLoading }: SearchReposProps) {
-  const [query, setQuery] = useState("")
-  const [results, setResults] = useState<Repository[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [hasSearched, setHasSearched] = useState(false)
+export function SearchRepos({
+  onSelectRepo,
+  isLoading: parentLoading,
+}: SearchReposProps) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Repository[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
 
   const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setIsLoading(true)
-    setHasSearched(true)
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+    setHasSearched(true);
 
     if (!query.trim()) {
-      setError("Please enter a search query")
-      setIsLoading(false)
-      return
+      setError("Please enter a search query");
+      setIsLoading(false);
+      return;
     }
 
     try {
-      const repos = await searchRepositories(query)
-      setResults(repos)
+      const repos = await searchRepositories(query);
+      setResults(repos);
       if (repos.length === 0) {
-        setError("No repositories found. Try a different search term.")
+        setError("No repositories found. Try a different search term.");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to search repositories")
+      setError(
+        err instanceof Error ? err.message : "Failed to search repositories"
+      );
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="space-y-4">
@@ -71,7 +76,11 @@ export function SearchRepos({ onSelectRepo, isLoading: parentLoading }: SearchRe
           className="flex-1"
         />
         <Button type="submit" disabled={isLoading || parentLoading} size="icon">
-          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+          {isLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Search className="w-4 h-4" />
+          )}
         </Button>
       </form>
 
@@ -84,7 +93,9 @@ export function SearchRepos({ onSelectRepo, isLoading: parentLoading }: SearchRe
 
       {hasSearched && results.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">Found {results.length} repositories</p>
+          <p className="text-sm text-muted-foreground">
+            Found {results.length} repositories
+          </p>
           <div className="grid gap-2">
             {results.map((repo) => (
               <Card
@@ -110,7 +121,9 @@ export function SearchRepos({ onSelectRepo, isLoading: parentLoading }: SearchRe
                       </a>
                     </div>
                     {repo.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">{repo.description}</p>
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {repo.description}
+                      </p>
                     )}
                   </div>
                   <div className="flex items-center gap-1 text-sm text-muted-foreground whitespace-nowrap">
@@ -131,5 +144,5 @@ export function SearchRepos({ onSelectRepo, isLoading: parentLoading }: SearchRe
         </div>
       )}
     </div>
-  )
+  );
 }

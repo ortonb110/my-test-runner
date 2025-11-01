@@ -1,19 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useState, useEffect, use } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Shield, AlertCircle, Github } from "lucide-react";
-import { AuthModal } from "@/src/components/molecules/auth-modal";
-import { SearchRepos } from "@/src/components/molecules/search-repos";
-import { ScanResults } from "@/src/components/molecules/scan-results";
+import { AuthModal } from "@/components/molecules/auth-modal";
+import { SearchRepos } from "@/components/molecules/search-repos";
+import { ScanResults } from "@/components/molecules/scan-results";
 import {
   scanRepositoryForSecrets,
   hasToken,
   clearGitHubToken,
   getRateLimitInfo,
-} from "@/src/lib/github-api";
+} from "@/lib/github-api";
+import { signOut } from "next-auth/react";
 
 interface SecretMatch {
   file: string;
@@ -25,6 +27,7 @@ interface SecretMatch {
 type AppState = "search" | "scanning" | "results";
 
 export default function Home() {
+  const { data: session } = useSession();
   const [appState, setAppState] = useState<AppState>("search");
   const [selectedRepo, setSelectedRepo] = useState<{
     owner: string;
@@ -35,7 +38,7 @@ export default function Home() {
   const [scanProgress, setScanProgress] = useState("");
   const [error, setError] = useState("");
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(hasToken());
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [rateLimit, setRateLimit] = useState(getRateLimitInfo());
 
   useEffect(() => {
@@ -83,8 +86,14 @@ export default function Home() {
     setIsAuthenticated(false);
   };
 
+  useEffect(() => {
+    if (session && session.user) {
+      setIsAuthenticated(true);
+    }
+  }, [session]);
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <main className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -114,7 +123,7 @@ export default function Home() {
               {isAuthenticated && (
                 <Button
                   variant="outline"
-                  onClick={handleLogout}
+                  onClick={() => signOut()}
                   className="text-slate-300 border-slate-600 hover:bg-slate-700 bg-transparent"
                 >
                   Logout
@@ -141,19 +150,19 @@ export default function Home() {
               <h2 className="font-semibold text-white mb-4">How it works</h2>
               <ol className="space-y-3 text-sm text-slate-300">
                 <li className="flex gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold">
+                  <span className="shrink-0 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold">
                     1
                   </span>
                   <span>Search for a public GitHub repository</span>
                 </li>
                 <li className="flex gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold">
+                  <span className="shrink-0 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold">
                     2
                   </span>
                   <span>We scan files for potential secrets</span>
                 </li>
                 <li className="flex gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold">
+                  <span className="shrink-0 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold">
                     3
                   </span>
                   <span>Review findings and create an issue</span>
@@ -162,12 +171,17 @@ export default function Home() {
 
               <div className="mt-6 pt-6 border-t border-slate-700">
                 <p className="text-xs text-slate-400 mb-3">
-                  Authenticate with GitHub to create issues on repositories.
+                  {isAuthenticated
+                    ? `You are authenticated with GitHub, ${
+                        session?.user?.name || session?.user?.email
+                      }.`
+                    : "Authenticate with GitHub to create issues directly from the scan results."}
                 </p>
                 <Button
                   onClick={() => setAuthModalOpen(true)}
                   className="w-full bg-red-600 hover:bg-red-700 text-white"
                   variant={isAuthenticated ? "outline" : "default"}
+                  disabled={isAuthenticated}
                 >
                   <Github className="w-4 h-4 mr-2" />
                   {isAuthenticated ? "Authenticated" : "Authenticate"}
@@ -255,7 +269,6 @@ export default function Home() {
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-        onAuthenticated={() => setIsAuthenticated(true)}
       />
     </main>
   );

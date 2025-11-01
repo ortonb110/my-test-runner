@@ -1,80 +1,83 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Loader2, AlertTriangle, Copy, Check, Github } from "lucide-react"
-import { createGitHubIssue, hasToken } from "@/src/lib/github-api"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, AlertTriangle, Copy, Check, Github } from "lucide-react";
+import { createGitHubIssue, hasToken } from "@/lib/github-api";
 
 interface SecretMatch {
-  file: string
-  line: number
-  content: string
-  type: string
+  file: string;
+  line: number;
+  content: string;
+  type: string;
 }
 
 interface ScanResultsProps {
-  owner: string
-  repo: string
-  secrets: SecretMatch[]
-  isLoading?: boolean
-  onOpenAuthModal: () => void
+  owner: string;
+  repo: string;
+  secrets: SecretMatch[];
+  isLoading?: boolean;
+  onOpenAuthModal: () => void;
 }
 
-export function ScanResults({ owner, repo, secrets, isLoading, onOpenAuthModal }: ScanResultsProps) {
-  const [isCreatingIssue, setIsCreatingIssue] = useState(false)
-  const [issueCreated, setIssueCreated] = useState(false)
-  const [issueUrl, setIssueUrl] = useState("")
-  const [error, setError] = useState("")
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+export function ScanResults({
+  owner,
+  repo,
+  secrets,
+  isLoading,
+  onOpenAuthModal,
+}: ScanResultsProps) {
+  const [isCreatingIssue, setIsCreatingIssue] = useState(false);
+  const [issueCreated, setIssueCreated] = useState(false);
+  const [issueUrl, setIssueUrl] = useState("");
+  const [error, setError] = useState("");
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
-  const secretsByType = secrets.reduce(
-    (acc, secret) => {
-      if (!acc[secret.type]) acc[secret.type] = []
-      acc[secret.type].push(secret)
-      return acc
-    },
-    {} as Record<string, SecretMatch[]>,
-  )
+  const secretsByType = secrets.reduce((acc, secret) => {
+    if (!acc[secret.type]) acc[secret.type] = [];
+    acc[secret.type].push(secret);
+    return acc;
+  }, {} as Record<string, SecretMatch[]>);
 
   const handleCreateIssue = async () => {
     if (!hasToken()) {
-      onOpenAuthModal()
-      return
+      onOpenAuthModal();
+      return;
     }
 
-    setError("")
-    setIsCreatingIssue(true)
+    setError("");
+    setIsCreatingIssue(true);
 
     try {
-      const result = await createGitHubIssue(owner, repo, secrets)
+      const result = await createGitHubIssue(owner, repo, secrets);
       if (result.success && result.issueUrl) {
-        setIssueCreated(true)
-        setIssueUrl(result.issueUrl)
+        setIssueCreated(true);
+        setIssueUrl(result.issueUrl);
       } else {
-        setError(result.error || "Failed to create issue")
+        setError(result.error || "Failed to create issue");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create issue")
+      setError(err instanceof Error ? err.message : "Failed to create issue");
     } finally {
-      setIsCreatingIssue(false)
+      setIsCreatingIssue(false);
     }
-  }
+  };
 
   const copyToClipboard = (text: string, index: number) => {
-    navigator.clipboard.writeText(text)
-    setCopiedIndex(index)
-    setTimeout(() => setCopiedIndex(null), 2000)
-  }
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-6 h-6 animate-spin" />
       </div>
-    )
+    );
   }
 
   if (secrets.length === 0) {
@@ -86,7 +89,7 @@ export function ScanResults({ owner, repo, secrets, isLoading, onOpenAuthModal }
           <p className="text-sm mt-1">This is a good sign!</p>
         </div>
       </Card>
-    )
+    );
   }
 
   return (
@@ -94,8 +97,10 @@ export function ScanResults({ owner, repo, secrets, isLoading, onOpenAuthModal }
       <Alert variant="destructive">
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
-          Found {secrets.length} potential secret{secrets.length !== 1 ? "s" : ""} in{" "}
-          {Object.keys(secretsByType).length} categor{Object.keys(secretsByType).length !== 1 ? "ies" : "y"}
+          Found {secrets.length} potential secret
+          {secrets.length !== 1 ? "s" : ""} in{" "}
+          {Object.keys(secretsByType).length} categor
+          {Object.keys(secretsByType).length !== 1 ? "ies" : "y"}
         </AlertDescription>
       </Alert>
 
@@ -151,10 +156,16 @@ export function ScanResults({ owner, repo, secrets, isLoading, onOpenAuthModal }
                       onClick={() => copyToClipboard(match.content, idx)}
                       className="h-6 w-6 p-0"
                     >
-                      {copiedIndex === idx ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      {copiedIndex === idx ? (
+                        <Check className="w-3 h-3" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
                     </Button>
                   </div>
-                  <div className="text-foreground break-all">{match.content}</div>
+                  <div className="text-foreground break-all">
+                    {match.content}
+                  </div>
                 </div>
               ))}
             </div>
@@ -162,7 +173,12 @@ export function ScanResults({ owner, repo, secrets, isLoading, onOpenAuthModal }
         ))}
       </div>
 
-      <Button onClick={handleCreateIssue} disabled={isCreatingIssue || issueCreated} className="w-full" size="lg">
+      <Button
+        onClick={handleCreateIssue}
+        disabled={isCreatingIssue || issueCreated}
+        className="w-full"
+        size="lg"
+      >
         {isCreatingIssue ? (
           <>
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -181,5 +197,5 @@ export function ScanResults({ owner, repo, secrets, isLoading, onOpenAuthModal }
         )}
       </Button>
     </div>
-  )
+  );
 }

@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import HomePageTemplate from "@/src/components/organism/home_page_template";
+import HomePageTemplate from "@/components/organism/home_page_template";
 
 export const metadata: Metadata = {
   title:
