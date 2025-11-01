@@ -14,6 +14,7 @@ import {
   hasToken,
   clearGitHubToken,
   getRateLimitInfo,
+  syncGitHubAuthToken,
 } from "@/lib/github-api";
 import { signOut } from "next-auth/react";
 
@@ -39,12 +40,27 @@ export default function Home() {
   const [error, setError] = useState("");
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [rateLimit, setRateLimit] = useState(getRateLimitInfo());
+  const [rateLimit, setRateLimit] = useState<{
+    limit: number;
+    remaining: number;
+    reset: number;
+  } | null>(null);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setRateLimit(getRateLimitInfo());
-    }, 1000);
+    syncGitHubAuthToken();
+
+    const fetchRateLimit = async () => {
+      const rateLimitInfo: { limit: number; remaining: number; reset: number } =
+        await getRateLimitInfo();
+      setRateLimit(rateLimitInfo);
+    };
+
+    // fetch immediately
+    fetchRateLimit();
+
+    // refresh periodically
+    const interval = setInterval(fetchRateLimit, 1000);
+
     return () => clearInterval(interval);
   }, []);
 
@@ -81,13 +97,8 @@ export default function Home() {
     setScanProgress("");
   };
 
-  const handleLogout = () => {
-    clearGitHubToken();
-    setIsAuthenticated(false);
-  };
-
   useEffect(() => {
-    if (session && session.user) {
+    if (session) {
       setIsAuthenticated(true);
     }
   }, [session]);
@@ -114,10 +125,12 @@ export default function Home() {
                 <p className="text-slate-400">API Requests</p>
                 <p
                   className={`font-semibold ${
-                    rateLimit.remaining < 10 ? "text-red-400" : "text-green-400"
+                    rateLimit?.remaining && rateLimit?.remaining < 10
+                      ? "text-red-400"
+                      : "text-green-400"
                   }`}
                 >
-                  {rateLimit.remaining} / {rateLimit.limit}
+                  {rateLimit?.remaining} / {rateLimit?.limit}
                 </p>
               </div>
               {isAuthenticated && (
