@@ -49,3 +49,4 @@ If given more time, I would:
 - Enhance detection patterns using **machine learning-based secret classification**.  
 - Add **report export (PDF/CSV)** and **email notifications**.  
 - Improve performance with **parallel file scanning** and **caching**.
+- Implement **slug-based redirect flow** — if a user initiates a scan or tries to create an issue while not logged in, they would be redirected to GitHub login with a callback URL and returned to the original scan page upon successful authentication.
