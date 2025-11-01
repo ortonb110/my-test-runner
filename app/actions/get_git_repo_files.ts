@@ -13,9 +13,9 @@ export async function getRepositoryFiles(
   const session = await auth();
   const token = session?.accessToken;
 
-  if (!token) {
-    throw new Error("GitHub token required to fetch repository files");
-  }
+  // if (!token) {
+  //   throw new Error("GitHub token required to fetch repository files");
+  // }
 
   try {
     const response = await fetchWithRetry(
@@ -23,7 +23,8 @@ export async function getRepositoryFiles(
       {
         headers: {
           Accept: "application/vnd.github.v3+json",
-          Authorization: `Bearer ${token}`,
+          // Check if token exists before adding Authorization header
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       }
     );
