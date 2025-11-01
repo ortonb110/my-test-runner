@@ -108,26 +108,28 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900">
+    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="bg-red-500 p-2 rounded-lg">
+        <div className="mb-8 space-y-4">
+          {/* Top Bar */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+              <div className="bg-red-500 p-2 rounded-lg w-fit mx-auto sm:mx-0 mb-2 sm:mb-0">
                 <Shield className="w-6 h-6 text-white" />
               </div>
-              <div>
-                <h1 className="text-3xl font-bold text-white">
+              <div className="text-center sm:text-left">
+                <h1 className="text-2xl sm:text-3xl font-bold text-white">
                   Secret Scanner
                 </h1>
-                <p className="text-slate-400">
-                  Scan public/private (Owned) repositories for exposed secrets
+                <p className="text-slate-400 text-sm sm:text-base">
+                  Scan public/private (owned) repositories for exposed secrets
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="text-right text-sm">
+
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3 text-center sm:text-right">
+              <div className="text-sm mb-2 sm:mb-0">
                 <p className="text-slate-400">API Requests</p>
                 <p
                   className={`font-semibold ${
@@ -143,7 +145,7 @@ export default function Home() {
                 <Button
                   variant="outline"
                   onClick={() => signOut()}
-                  className="text-slate-300 border-slate-600 hover:bg-slate-700 bg-transparent"
+                  className="text-slate-300 border-slate-600 hover:bg-slate-700 bg-transparent w-full sm:w-auto"
                 >
                   Logout
                 </Button>
@@ -151,9 +153,10 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Info Alert */}
           <Alert className="bg-blue-900/30 border-blue-700 text-blue-100">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <AlertDescription className="text-sm">
               This tool helps identify potential API keys and secrets in public
               repositories. Use responsibly and only on repositories you have
               permission to scan.
@@ -161,37 +164,33 @@ export default function Home() {
           </Alert>
         </div>
 
-        {/* Main Content */}
-        <div className="grid lg:grid-cols-3 gap-6">
+        {/* Main Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Sidebar */}
           <div className="lg:col-span-1">
             <Card className="p-6 bg-slate-800 border-slate-700 sticky top-8">
-              <h2 className="font-semibold text-white mb-4">How it works</h2>
+              <h2 className="font-semibold text-white mb-4 text-lg text-center sm:text-left">
+                How it works
+              </h2>
               <ol className="space-y-3 text-sm text-slate-300">
-                <li className="flex gap-3">
-                  <span className="shrink-0 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold">
-                    1
-                  </span>
-                  <span>Search for a public GitHub repository</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="shrink-0 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold">
-                    2
-                  </span>
-                  <span>We scan files for potential secrets</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="shrink-0 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold">
-                    3
-                  </span>
-                  <span>Review findings and create an issue</span>
-                </li>
+                {[
+                  "Search for a public GitHub repository",
+                  "We scan files for potential secrets",
+                  "Review findings and create an issue",
+                ].map((text, i) => (
+                  <li key={i} className="flex items-start gap-3">
+                    <span className="shrink-0 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-bold">
+                      {i + 1}
+                    </span>
+                    <span>{text}</span>
+                  </li>
+                ))}
               </ol>
 
               <div className="mt-6 pt-6 border-t border-slate-700">
-                <p className="text-xs text-slate-400 mb-3">
+                <p className="text-xs text-slate-400 mb-3 text-center sm:text-left">
                   {isAuthenticated
-                    ? `You are authenticated with GitHub, ${
+                    ? `Authenticated as ${
                         session?.user?.name || session?.user?.email
                       }.`
                     : "Authenticate with GitHub to create issues directly from the scan results."}
@@ -226,9 +225,9 @@ export default function Home() {
 
               {appState === "scanning" && (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Loader2 className="w-5 h-5 animate-spin text-red-500" />
-                    <div>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <Loader2 className="w-5 h-5 animate-spin text-red-500 mx-auto sm:mx-0" />
+                    <div className="text-center sm:text-left">
                       <h2 className="text-xl font-semibold text-white">
                         Scanning Repository
                       </h2>
@@ -238,7 +237,7 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="bg-slate-700 rounded p-4">
-                    <p className="text-sm text-slate-300 font-mono">
+                    <p className="text-sm text-slate-300 font-mono break-all">
                       {scanProgress}
                     </p>
                   </div>
@@ -247,8 +246,8 @@ export default function Home() {
 
               {appState === "results" && selectedRepo && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="text-center sm:text-left">
                       <h2 className="text-xl font-semibold text-white">
                         Scan Results
                       </h2>
@@ -259,7 +258,7 @@ export default function Home() {
                     <Button
                       variant="outline"
                       onClick={handleReset}
-                      className="text-slate-300 border-slate-600 hover:bg-slate-700 bg-transparent"
+                      className="text-slate-300 border-slate-600 hover:bg-slate-700 bg-transparent w-full sm:w-auto"
                     >
                       New Scan
                     </Button>
@@ -267,7 +266,7 @@ export default function Home() {
 
                   {error && (
                     <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
+                      <AlertCircle className="h-4 w-4 shrink-0" />
                       <AlertDescription>{error}</AlertDescription>
                     </Alert>
                   )}
