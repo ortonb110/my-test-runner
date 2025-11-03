@@ -9,11 +9,7 @@ import { Loader2, Shield, AlertCircle, Github } from "lucide-react";
 import { AuthModal } from "@/components/molecules/auth-modal";
 import { SearchRepos } from "@/components/molecules/search-repos";
 import { ScanResults } from "@/components/molecules/scan-results";
-import {
-  scanRepositoryForSecrets,
-  getRateLimitInfo,
-  syncGitHubAuthToken,
-} from "@/lib/github-api";
+import { scanRepositoryForSecrets, getRateLimitInfo } from "@/lib/github-api";
 import { signOut } from "next-auth/react";
 
 interface SecretMatch {
@@ -47,18 +43,14 @@ export default function Home() {
     reset: number;
   } | null>(null);
 
-  const fetchRateLimit = async () => {
+  const fetchRateLimit = async (token?: string) => {
     const rateLimitInfo: {
       limit: number;
       remaining: number;
       reset: number;
-    } = await getRateLimitInfo();
+    } = await getRateLimitInfo(token);
     setRateLimit(rateLimitInfo);
   };
-
-  useEffect(() => {
-    syncGitHubAuthToken();
-  }, []);
 
   const handleSelectRepo = async (owner: string, repo: string) => {
     setSelectedRepo({ owner, repo });
@@ -97,18 +89,21 @@ export default function Home() {
     if (session) {
       setIsAuthenticated(true);
       // fetch immediately
-      fetchRateLimit();
+      fetchRateLimit(session.accessToken);
     }
   }, [session]);
 
   useEffect(() => {
     // refresh periodically
-    const interval = setInterval(fetchRateLimit, 60000);
+    const interval = setInterval(
+      () => fetchRateLimit(session?.accessToken || ""),
+      60000
+    );
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <main className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8 space-y-4">

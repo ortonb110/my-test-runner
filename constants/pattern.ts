@@ -1,4 +1,38 @@
-export const SECRET_PATTERNS = [
+/**
+ * Secret detection patterns used by the repository scanner.
+ *
+ * Each entry in this array describes a secret-like pattern that the scanner
+ * should flag when matched. The expected object shape is:
+ *
+ * {
+ *   id: string,           // unique identifier for the pattern
+ *   name: string,         // human-friendly name
+ *   regex: RegExp,        // regular expression to detect the secret
+ *   description: string,  // short explanation of what the secret is
+ *   severity: string      // severity level: 'low' | 'medium' | 'high' | 'critical'
+ * }
+ *
+ * Notes:
+ * - The `severity` field is used for UI/reporting only and does not affect
+ *   the detection algorithm.
+ *
+ * Example usage:
+ * for (const pattern of SECRET_PATTERNS) {
+ *   if (pattern.regex.test(line)) {
+ *     // record match
+ *     if (pattern.regex.global) pattern.regex.lastIndex = 0;
+ *   }
+ * }
+ *
+ * @type {{id: string; name: string; regex: RegExp; description: string; severity: string}[]}
+ */
+export const SECRET_PATTERNS: {
+  id: string;
+  name: string;
+  regex: RegExp;
+  description: string;
+  severity: "low" | "medium" | "high" | "critical";
+}[] = [
   {
     id: "aws_access_key",
     name: "AWS Access Key ID",

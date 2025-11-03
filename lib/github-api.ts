@@ -41,53 +41,15 @@ export class GitHubAPIError extends Error {
   }
 }
 
-// In-memory token storage (never persisted)
-let currentToken: string | null = null;
-
 let rateLimitInfo: RateLimitInfo = {
   remaining: 0,
   limit: 0,
   reset: 0,
 };
 
-const requestQueue: Array<() => Promise<any>> = [];
-let isProcessingQueue = false;
-const REQUEST_DELAY = 100; // ms between requests
-
-export function setGitHubToken(token: string) {
-  currentToken = token;
-}
-
-export function clearGitHubToken() {
-  currentToken = null;
-}
-
-export function hasToken(): boolean {
-  return currentToken !== null;
-}
-
-/**
- * Automatically syncs the GitHub token from the current NextAuth session
- * (client or server)
- */
-export async function syncGitHubAuthToken() {
-  try {
-    const session = await getSession();
-    if (session?.accessToken) {
-      setGitHubToken(session.accessToken);
-    } else {
-      if (process.env.NODE_ENV === "development") {
-        console.info(
-          "[GitHubAPI] Using unauthenticated (limited) GitHub access"
-        );
-      }
-    }
-  } catch (err) {
-    if (process.env.NODE_ENV === "development") {
-      console.error("[GitHubAPI] Failed to sync token:", err);
-    }
-  }
-}
+// const requestQueue: Array<() => Promise<any>> = [];
+// let isProcessingQueue = false;
+// const REQUEST_DELAY = 100; // ms between requests
 
 /**
  * Retrieve the current GitHub API rate limit information.
@@ -110,36 +72,64 @@ export async function syncGitHubAuthToken() {
  * @throws {Error} Will reject if the network request fails or GitHub returns
  *   an unexpected body that can't be parsed.
  */
-export async function getRateLimitInfo(): Promise<RateLimitInfo> {
+export async function getRateLimitInfo(token?: string): Promise<RateLimitInfo> {
   // Fetch latest rate limit info or return default
   const response = await fetch("https://api.github.com/rate_limit", {
     headers: {
-      ...(hasToken() && { Authorization: `Bearer ${currentToken}` }),
+      ...(token && { Authorization: `Bearer ${token}` }),
     },
   });
   const data = await response.json();
   return data.rate;
 }
 
-async function processRequestQueue() {
-  if (isProcessingQueue || requestQueue.length === 0) return;
+// async function processRequestQueue() {
+//   if (isProcessingQueue || requestQueue.length === 0) return;
 
-  isProcessingQueue = true;
-  while (requestQueue.length > 0) {
-    const request = requestQueue.shift();
-    if (request) {
-      try {
-        await request();
-      } catch (error) {
-        console.error("[v0] Queue request failed:", error);
-      }
-      // Delay between requests to avoid rate limiting
-      await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY));
-    }
-  }
-  isProcessingQueue = false;
-}
+//   isProcessingQueue = true;
+//   while (requestQueue.length > 0) {
+//     const request = requestQueue.shift();
+//     if (request) {
+//       try {
+//         await request();
+//       } catch (error) {
+//         console.error("[v0] Queue request failed:", error);
+//       }
+//       // Delay between requests to avoid rate limiting
+//       await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY));
+//     }
+//   }
+//   isProcessingQueue = false;
+// }
 
+/**
+ * Fetch data with retry and basic GitHub rate-limit handling.
+ *
+ * Behavior summary:
+ * - Checks a cached `rateLimitInfo` before issuing requests and throws a
+ *   retryable `GitHubAPIError` when the client is currently rate-limited.
+ * - Uses the native `fetch` API to perform the request, then reads GitHub
+ *   rate-limit headers (`x-ratelimit-remaining`, `x-ratelimit-limit`,
+ *   `x-ratelimit-reset`) and updates the in-memory `rateLimitInfo` object.
+ * - On HTTP 429 (Too Many Requests) the function waits for `Retry-After` or
+ *   uses exponential backoff, then retries. For other 5xx errors it retries
+ *   with exponential backoff as well. Non-retryable errors (like 401/403/404)
+ *   throw a `GitHubAPIError` immediately.
+ *
+ * Example:
+ * ```ts
+ * const res = await fetchWithRetry('https://api.github.com/user', { headers: { Accept: 'application/vnd.github.v3+json' } });
+ * const data = await res.json();
+ * ```
+ *
+ * @param {string} url - Request URL.
+ * @param {RequestInit} [options={}] - Fetch options (headers, method, body, etc.).
+ * @param {number} [maxRetries=3] - Maximum number of attempts before failing.
+ * @returns {Promise<Response>} Resolves with the successful fetch Response.
+ * @throws {GitHubAPIError|Error} Throws a `GitHubAPIError` when GitHub
+ *   responds with an error (non-ok) or when rate-limiting prevents requests.
+ *   If all retries fail, the last error is re-thrown.
+ */
 async function fetchWithRetry(
   url: string,
   options: RequestInit = {},
@@ -252,6 +242,8 @@ export async function searchRepositories(
   incomplete_results: boolean;
   items: GitHubRepository[];
 }> {
+  const session = await getSession();
+  const currentToken = session?.accessToken as string | undefined;
   try {
     const response = await fetchWithRetry(
       `https://api.github.com/search/repositories?q=${encodeURIComponent(
@@ -351,7 +343,6 @@ export async function scanRepositoryForSecrets(
       ".DS_Store",
       "package.json",
     ];
-
     try {
       onProgress?.(`Scanning directory: ${path || "root"}`);
       const files = await getRepositoryFiles(owner, repo, path);
@@ -400,7 +391,6 @@ export async function scanRepositoryForSecrets(
             if (file.download_url) {
               const content = await getFileContent(file.download_url);
               const lines = content.split("\n");
-
               lines.forEach((line, lineIndex) => {
                 SECRET_PATTERNS.forEach((pattern) => {
                   if (pattern.regex.test(line)) {
@@ -419,14 +409,18 @@ export async function scanRepositoryForSecrets(
               });
             }
           } catch (error) {
-            console.error(`[v0] Error scanning file ${file.path}:`, error);
+            if (process.env.NODE_ENV === "development") {
+              console.error(`[v0] Error scanning file ${file.path}:`, error);
+            }
           }
         } else if (file.type === "dir" && depth < 3) {
           await scanDirectory(file.path, depth + 1);
         }
       }
     } catch (error) {
-      console.error(`[v0] Error scanning directory ${path}:`, error);
+      if (process.env.NODE_ENV === "development") {
+        console.error(`[v0] Error scanning directory ${path}:`, error);
+      }
       throw error;
     }
   }
